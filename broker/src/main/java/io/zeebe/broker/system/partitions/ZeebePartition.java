@@ -231,6 +231,7 @@ public final class ZeebePartition extends Actor
           if (failureListener != null) {
             failureListener.onFailure();
           }
+          context.getPartitionHealthListener().onHealthDown(getPartitionId());
         });
   }
 
@@ -242,11 +243,13 @@ public final class ZeebePartition extends Actor
           if (failureListener != null) {
             failureListener.onRecovered();
           }
+          context.getPartitionHealthListener().onHealthUp(getPartitionId());
         });
   }
 
   private void onInstallFailure() {
     zeebePartitionHealth.setServicesInstalled(false);
+    context.getPartitionHealthListener().onHealthDown(getPartitionId());
     if (context.getRaftPartition().getRole() == Role.LEADER) {
       LOG.info("Unexpected failures occurred when installing leader services, stepping down");
       context.getRaftPartition().stepDown();
@@ -254,6 +257,7 @@ public final class ZeebePartition extends Actor
   }
 
   private void onRecoveredInternal() {
+    context.getPartitionHealthListener().onHealthUp(getPartitionId());
     zeebePartitionHealth.setServicesInstalled(true);
   }
 

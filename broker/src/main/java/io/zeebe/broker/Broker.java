@@ -403,7 +403,8 @@ public final class Broker implements AutoCloseable {
                     partitionIndexes.get(partitionId),
                     snapshotStoreSupplier,
                     createFactory(topologyManager, clusterCfg, atomix, managementRequestHandler),
-                    buildExporterRepository(brokerCfg));
+                    buildExporterRepository(brokerCfg),
+                    topologyManager);
             final PartitionTransitionImpl transitionBehavior =
                 new PartitionTransitionImpl(context, LEADER_STEPS, FOLLOWER_STEPS);
             final ZeebePartition zeebePartition = new ZeebePartition(context, transitionBehavior);

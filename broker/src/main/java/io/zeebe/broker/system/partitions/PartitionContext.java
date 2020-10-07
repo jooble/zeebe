@@ -37,6 +37,7 @@ public class PartitionContext {
   private final PartitionMessagingService messagingService;
   private final ActorScheduler scheduler;
   private final BrokerCfg brokerCfg;
+  private final PartitionHealthListener partitionHealthListener;
 
   private final SnapshotStoreSupplier snapshotStoreSupplier;
   private final RaftPartition raftPartition;
@@ -75,7 +76,8 @@ public class PartitionContext {
       final ZeebeIndexMapping zeebeIndexMapping,
       final SnapshotStoreSupplier snapshotStoreSupplier,
       final TypedRecordProcessorsFactory typedRecordProcessorsFactory,
-      final ExporterRepository exporterRepository) {
+      final ExporterRepository exporterRepository,
+      final PartitionHealthListener partitionHealthListener) {
     this.nodeId = nodeId;
     this.raftPartition = raftPartition;
     this.messagingService = messagingService;
@@ -89,6 +91,7 @@ public class PartitionContext {
     maxFragmentSize = (int) brokerCfg.getNetwork().getMaxMessageSizeInBytes();
     this.zeebeIndexMapping = zeebeIndexMapping;
     this.exporterRepository = exporterRepository;
+    this.partitionHealthListener = partitionHealthListener;
   }
 
   public ExporterDirector getExporterDirector() {
@@ -273,5 +276,9 @@ public class PartitionContext {
 
   public boolean shouldProcess() {
     return isDiskSpaceAvailable() && !isProcessingPaused();
+  }
+
+  public PartitionHealthListener getPartitionHealthListener() {
+    return partitionHealthListener;
   }
 }

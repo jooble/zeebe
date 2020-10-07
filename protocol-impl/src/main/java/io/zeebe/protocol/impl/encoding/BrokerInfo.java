@@ -17,14 +17,17 @@ import static io.zeebe.util.buffer.BufferUtil.wrapString;
 import io.zeebe.protocol.impl.Loggers;
 import io.zeebe.protocol.record.BrokerInfoDecoder;
 import io.zeebe.protocol.record.BrokerInfoDecoder.AddressesDecoder;
+import io.zeebe.protocol.record.BrokerInfoDecoder.PartitionHealthDecoder;
 import io.zeebe.protocol.record.BrokerInfoDecoder.PartitionLeaderTermsDecoder;
 import io.zeebe.protocol.record.BrokerInfoDecoder.PartitionRolesDecoder;
 import io.zeebe.protocol.record.BrokerInfoEncoder;
 import io.zeebe.protocol.record.BrokerInfoEncoder.AddressesEncoder;
+import io.zeebe.protocol.record.BrokerInfoEncoder.PartitionHealthEncoder;
 import io.zeebe.protocol.record.BrokerInfoEncoder.PartitionLeaderTermsEncoder;
 import io.zeebe.protocol.record.BrokerInfoEncoder.PartitionRolesEncoder;
 import io.zeebe.protocol.record.MessageHeaderDecoder;
 import io.zeebe.protocol.record.MessageHeaderEncoder;
+import io.zeebe.protocol.record.PartitionHealthStatus;
 import io.zeebe.protocol.record.PartitionRole;
 import io.zeebe.util.buffer.BufferReader;
 import io.zeebe.util.buffer.BufferUtil;
@@ -64,6 +67,7 @@ public final class BrokerInfo implements BufferReader, BufferWriter {
   private final Map<DirectBuffer, DirectBuffer> addresses = new HashMap<>();
   private final Map<Integer, PartitionRole> partitionRoles = new HashMap<>();
   private final Map<Integer, Long> partitionLeaderTerms = new HashMap<>();
+  private final Map<Integer, PartitionHealthStatus> partitionHealthStatuses = new HashMap<>();
 
   private int nodeId;
   private int partitionsCount;
@@ -96,6 +100,7 @@ public final class BrokerInfo implements BufferReader, BufferWriter {
   public void clearPartitions() {
     partitionRoles.clear();
     partitionLeaderTerms.clear();
+    partitionHealthStatuses.clear();
   }
 
   public int getNodeId() {
@@ -176,12 +181,32 @@ public final class BrokerInfo implements BufferReader, BufferWriter {
     return partitionRoles;
   }
 
+  public Map<Integer, PartitionHealthStatus> getPartitionHealthStatuses() {
+    return partitionHealthStatuses;
+  }
+
   public Map<Integer, Long> getPartitionLeaderTerms() {
     return partitionLeaderTerms;
   }
 
   public BrokerInfo addPartitionRole(final Integer partitionId, final PartitionRole role) {
     partitionRoles.put(partitionId, role);
+    return this;
+  }
+
+  public BrokerInfo addPartitionHealth(
+      final Integer partitionId, final PartitionHealthStatus status) {
+    partitionHealthStatuses.put(partitionId, status);
+    return this;
+  }
+
+  public BrokerInfo setPartitionUnhealthy(final Integer partitionId) {
+    addPartitionHealth(partitionId, PartitionHealthStatus.UNHEALTHY);
+    return this;
+  }
+
+  public BrokerInfo setPartitionHealthy(final Integer partitionId) {
+    addPartitionHealth(partitionId, PartitionHealthStatus.HEALTHY);
     return this;
   }
 
@@ -240,6 +265,13 @@ public final class BrokerInfo implements BufferReader, BufferWriter {
           partitionLeaderTermsDecoder.partitionId(), partitionLeaderTermsDecoder.term());
     }
 
+    final PartitionHealthDecoder partitionHealthDecoder = bodyDecoder.partitionHealth();
+    while (partitionHealthDecoder.hasNext()) {
+      partitionHealthDecoder.next();
+      partitionHealthStatuses.put(
+          partitionHealthDecoder.partitionId(), partitionHealthDecoder.healthStatus());
+    }
+
     if (bodyDecoder.versionLength() > 0) {
       bodyDecoder.wrapVersion(version);
     } else {
@@ -262,6 +294,7 @@ public final class BrokerInfo implements BufferReader, BufferWriter {
             + AddressesEncoder.sbeHeaderSize()
             + PartitionRolesEncoder.sbeHeaderSize()
             + PartitionLeaderTermsEncoder.sbeHeaderSize()
+            + PartitionHealthEncoder.sbeHeaderSize()
             + versionHeaderLength()
             + version.capacity();
 
@@ -276,6 +309,7 @@ public final class BrokerInfo implements BufferReader, BufferWriter {
 
     length += partitionRoles.size() * PartitionRolesEncoder.sbeBlockLength();
     length += partitionLeaderTerms.size() * PartitionLeaderTermsEncoder.sbeBlockLength();
+    length += partitionHealthStatuses.size() * PartitionHealthEncoder.sbeBlockLength();
 
     return length;
   }
@@ -329,6 +363,16 @@ public final class BrokerInfo implements BufferReader, BufferWriter {
     if (partitionLeaderTermsCount > 0) {
       for (final Entry<Integer, Long> entry : partitionLeaderTerms.entrySet()) {
         partitionLeaderTermsEncoder.next().partitionId(entry.getKey()).term(entry.getValue());
+      }
+    }
+
+    final int partitionHealthCount = partitionHealthStatuses.size();
+    final PartitionHealthEncoder partitionHealthEncoder =
+        bodyEncoder.partitionHealthCount(partitionHealthCount);
+
+    if (partitionHealthCount > 0) {
+      for (final Entry<Integer, PartitionHealthStatus> entry : partitionHealthStatuses.entrySet()) {
+        partitionHealthEncoder.next().partitionId(entry.getKey()).healthStatus(entry.getValue());
       }
     }
 
@@ -406,6 +450,8 @@ public final class BrokerInfo implements BufferReader, BufferWriter {
         + partitionRoles
         + ", partitionLeaderTerms="
         + partitionLeaderTerms
+        + ", partitionHealthStatuses="
+        + partitionHealthStatuses
         + ", version="
         + BufferUtil.bufferAsString(version)
         + '}';

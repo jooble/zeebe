@@ -15,6 +15,7 @@ import io.atomix.core.Atomix;
 import io.zeebe.broker.Loggers;
 import io.zeebe.broker.PartitionListener;
 import io.zeebe.broker.system.configuration.ClusterCfg;
+import io.zeebe.broker.system.partitions.PartitionHealthListener;
 import io.zeebe.logstreams.log.LogStream;
 import io.zeebe.protocol.impl.encoding.BrokerInfo;
 import io.zeebe.util.LogUtil;
@@ -28,7 +29,10 @@ import org.agrona.collections.Int2ObjectHashMap;
 import org.slf4j.Logger;
 
 public final class TopologyManagerImpl extends Actor
-    implements TopologyManager, ClusterMembershipEventListener, PartitionListener {
+    implements TopologyManager,
+        ClusterMembershipEventListener,
+        PartitionListener,
+        PartitionHealthListener {
   private static final Logger LOG = Loggers.CLUSTERING_LOGGER;
 
   private final Int2ObjectHashMap<BrokerInfo> partitionLeaders = new Int2ObjectHashMap<>();
@@ -248,5 +252,17 @@ public final class TopologyManagerImpl extends Actor
     for (final TopologyPartitionListener listener : topologyPartitionListeners) {
       LogUtil.catchAndLog(LOG, () -> listener.onPartitionLeaderUpdated(partitionId, member));
     }
+  }
+
+  @Override
+  public void onHealthUp(final int partitionId) {
+    localBroker.setPartitionHealthy(partitionId);
+    publishTopologyChanges();
+  }
+
+  @Override
+  public void onHealthDown(final int partitionId) {
+    localBroker.setPartitionUnhealthy(partitionId);
+    publishTopologyChanges();
   }
 }
