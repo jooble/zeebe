@@ -16,6 +16,8 @@ def numToKeep = isDevelopBranch ? '-1' : '10'
 //the develop branch should be run hourly to detect flaky tests and instability, other branches only on commit
 def cronTrigger = isDevelopBranch ? '@hourly' : ''
 
+def shouldFail = (new java.util.Random().nextInt(10) >= 5)
+
 pipeline {
     agent {
         kubernetes {
@@ -271,20 +273,45 @@ pipeline {
         //         }
         //     }
         // }
+
+        stage('Test') {
+            steps {
+                echo "Hello World: shouldfail = ${shouldFail}"
+                container('maven') {
+                    sh 'sleep 10'
+                    sh (shouldFail ? ' exit 1' : 'exit 0')
+                }
+            }
+            post {
+                failure {
+                    script {
+                        if (shouldFail) {
+                            currentBuild.description = "Flaky Tests: PLACEHOLDER"
+                        }
+                    }
+                }
+            }
+        }
     }
 
     post {
         always {
             // Retrigger the build if there were connection issues
             script {
+                String userReason = null
                 if (agentDisconnected()) {
+                    userReason = 'agent-disconnected'
                     currentBuild.result = 'ABORTED'
                     currentBuild.description = "Aborted due to connection error"
 
                     build job: currentBuild.projectName, propagate: false, quietPeriod: 60, wait: false
                 }
 
+                if (currentBuild.description ==~ /.*Flaky Tests.*/) {
+                    userReason = 'flaky-tests'
+                }
                 // TODO: INFRA-1613 analytics should hook in here
+                org.camunda.helper.CIAnalytics.trackBuildStatus(this, userReason)
             }
         }
         changed {
