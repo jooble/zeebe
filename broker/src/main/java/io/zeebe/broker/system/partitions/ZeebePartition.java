@@ -22,6 +22,7 @@ import io.zeebe.util.health.HealthStatus;
 import io.zeebe.util.sched.Actor;
 import io.zeebe.util.sched.future.ActorFuture;
 import io.zeebe.util.sched.future.CompletableActorFuture;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -36,7 +37,7 @@ public final class ZeebePartition extends Actor
   private Role raftRole;
 
   private final String actorName;
-  private FailureListener failureListener;
+  private final List<FailureListener> failureListeners;
   private final HealthMetrics healthMetrics;
   private final RaftPartitionHealth raftPartitionHealth;
   private final ZeebePartitionHealth zeebePartitionHealth;
@@ -59,6 +60,7 @@ public final class ZeebePartition extends Actor
     zeebePartitionHealth = new ZeebePartitionHealth(context.getPartitionId());
     healthMetrics = new HealthMetrics(context.getPartitionId());
     healthMetrics.setUnhealthy();
+    failureListeners = new ArrayList<>();
   }
 
   /**
@@ -228,10 +230,7 @@ public final class ZeebePartition extends Actor
     actor.run(
         () -> {
           healthMetrics.setUnhealthy();
-          if (failureListener != null) {
-            failureListener.onFailure();
-          }
-          context.getPartitionHealthListener().onHealthDown(getPartitionId());
+          failureListeners.forEach(FailureListener::onFailure);
         });
   }
 
@@ -240,16 +239,12 @@ public final class ZeebePartition extends Actor
     actor.run(
         () -> {
           healthMetrics.setHealthy();
-          if (failureListener != null) {
-            failureListener.onRecovered();
-          }
-          context.getPartitionHealthListener().onHealthUp(getPartitionId());
+          failureListeners.forEach(FailureListener::onRecovered);
         });
   }
 
   private void onInstallFailure() {
     zeebePartitionHealth.setServicesInstalled(false);
-    context.getPartitionHealthListener().onHealthDown(getPartitionId());
     if (context.getRaftPartition().getRole() == Role.LEADER) {
       LOG.info("Unexpected failures occurred when installing leader services, stepping down");
       context.getRaftPartition().stepDown();
@@ -257,7 +252,6 @@ public final class ZeebePartition extends Actor
   }
 
   private void onRecoveredInternal() {
-    context.getPartitionHealthListener().onHealthUp(getPartitionId());
     zeebePartitionHealth.setServicesInstalled(true);
   }
 
@@ -268,7 +262,7 @@ public final class ZeebePartition extends Actor
 
   @Override
   public void addFailureListener(final FailureListener failureListener) {
-    actor.run(() -> this.failureListener = failureListener);
+    actor.run(() -> this.failureListeners.add(failureListener));
   }
 
   @Override

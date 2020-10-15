@@ -15,11 +15,11 @@ import io.atomix.core.Atomix;
 import io.zeebe.broker.Loggers;
 import io.zeebe.broker.PartitionListener;
 import io.zeebe.broker.system.configuration.ClusterCfg;
-import io.zeebe.broker.system.partitions.PartitionHealthListener;
 import io.zeebe.logstreams.log.LogStream;
 import io.zeebe.protocol.impl.encoding.BrokerInfo;
 import io.zeebe.util.LogUtil;
 import io.zeebe.util.VersionUtil;
+import io.zeebe.util.health.HealthStatus;
 import io.zeebe.util.sched.Actor;
 import io.zeebe.util.sched.future.ActorFuture;
 import java.util.ArrayList;
@@ -29,10 +29,7 @@ import org.agrona.collections.Int2ObjectHashMap;
 import org.slf4j.Logger;
 
 public final class TopologyManagerImpl extends Actor
-    implements TopologyManager,
-        ClusterMembershipEventListener,
-        PartitionListener,
-        PartitionHealthListener {
+    implements TopologyManager, ClusterMembershipEventListener, PartitionListener {
   private static final Logger LOG = Loggers.CLUSTERING_LOGGER;
 
   private final Int2ObjectHashMap<BrokerInfo> partitionLeaders = new Int2ObjectHashMap<>();
@@ -254,15 +251,12 @@ public final class TopologyManagerImpl extends Actor
     }
   }
 
-  @Override
-  public void onHealthUp(final int partitionId) {
-    localBroker.setPartitionHealthy(partitionId);
-    publishTopologyChanges();
-  }
-
-  @Override
-  public void onHealthDown(final int partitionId) {
-    localBroker.setPartitionUnhealthy(partitionId);
+  public void onHealthChanged(final int partitionId, final HealthStatus status) {
+    if (status == HealthStatus.HEALTHY) {
+      localBroker.setPartitionUnhealthy(partitionId);
+    } else if (status == HealthStatus.UNHEALTHY) {
+      localBroker.setPartitionHealthy(partitionId);
+    }
     publishTopologyChanges();
   }
 }
