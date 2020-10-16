@@ -408,10 +408,9 @@ public final class Broker implements AutoCloseable {
             final PartitionTransitionImpl transitionBehavior =
                 new PartitionTransitionImpl(context, LEADER_STEPS, FOLLOWER_STEPS);
             final ZeebePartition zeebePartition = new ZeebePartition(context, transitionBehavior);
+            scheduleActor(zeebePartition);
             zeebePartition.addFailureListener(
                 new PartitionHealthBroadcaster(partitionId, topologyManager::onHealthChanged));
-
-            scheduleActor(zeebePartition);
             healthCheckService.registerMonitoredPartition(
                 owningPartition.id().id(), zeebePartition);
             diskSpaceUsageListeners.add(zeebePartition);
