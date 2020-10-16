@@ -252,11 +252,14 @@ public final class TopologyManagerImpl extends Actor
   }
 
   public void onHealthChanged(final int partitionId, final HealthStatus status) {
-    if (status == HealthStatus.HEALTHY) {
-      localBroker.setPartitionUnhealthy(partitionId);
-    } else if (status == HealthStatus.UNHEALTHY) {
-      localBroker.setPartitionHealthy(partitionId);
-    }
-    publishTopologyChanges();
+    actor.run(
+        () -> {
+          if (status == HealthStatus.HEALTHY) {
+            localBroker.setPartitionUnhealthy(partitionId);
+          } else if (status == HealthStatus.UNHEALTHY) {
+            localBroker.setPartitionHealthy(partitionId);
+          }
+          publishTopologyChanges();
+        });
   }
 }
