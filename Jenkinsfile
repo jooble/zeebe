@@ -18,6 +18,17 @@ def cronTrigger = isDevelopBranch ? '@hourly' : ''
 
 def shouldFail = (new java.util.Random().nextInt(10) >= 5)
 
+def isAbortedByUser() {
+    for (action in currentBuild.rawBuild.getActions(jenkins.model.InterruptedBuildAction)) {
+        for (cause in action.getCauses()) {
+            // cause.getUser().getDisplayName()
+            // https://stackoverflow.com/questions/44890354/jenkins-get-user-who-aborted-a-build
+            return true
+        }
+    }
+    false
+}
+
 pipeline {
     agent {
         kubernetes {
@@ -307,10 +318,14 @@ pipeline {
                     build job: currentBuild.projectName, propagate: false, quietPeriod: 60, wait: false
                 }
 
+                if (isAbortedByUser()) {
+                    userReason = 'aborted-by-user'
+                }
+
                 if (currentBuild.description ==~ /.*Flaky Tests.*/) {
                     userReason = 'flaky-tests'
                 }
-                // TODO: INFRA-1613 analytics should hook in here
+
                 org.camunda.helper.CIAnalytics.trackBuildStatus(this, userReason)
             }
         }
