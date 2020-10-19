@@ -76,5 +76,10 @@ public class ZeebePartitionTest {
     public ActorFuture<Void> toInactive() {
       return CompletableActorFuture.completed(null);
     }
+
+    @Override
+    public ActorFuture<Void> currentTransitionFuture() {
+      return new CompletableActorFuture<>();
+    }
   }
 }
